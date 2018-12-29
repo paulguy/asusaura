@@ -1,0 +1,12 @@
+--- linux/drivers/i2c/busses/i2c-piix4.c.orig	2018-12-23 18:55:59.000000000 -0500
++++ linux/drivers/i2c/busses/i2c-piix4.c	2018-12-29 15:39:46.316375889 -0500
+@@ -960,7 +960,8 @@ static int piix4_probe(struct pci_dev *d
+ 	}
+ 
+ 	if (dev->vendor == PCI_VENDOR_ID_AMD &&
+-	    dev->device == PCI_DEVICE_ID_AMD_HUDSON2_SMBUS) {
++	    (dev->device == PCI_DEVICE_ID_AMD_HUDSON2_SMBUS ||
++	     dev->device == PCI_DEVICE_ID_AMD_KERNCZ_SMBUS)) {
+ 		retval = piix4_setup_sb800(dev, id, 1);
+ 	}
+ 
