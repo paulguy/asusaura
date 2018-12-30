@@ -4,7 +4,8 @@ run with `./testaura <maindev> <auxdev> [<r> <g> <b>]`
 
 maindev is usually the device listed as port 0 for example by i2cdetect
 auxdev should be listed as port 4
-they take the full dev path eg.: `/dev/i2c-11`
+they take the full dev path eg.: `/dev/i2c-11`.  You'll need to be able to open
+and write these devices.
 
 r, g, and b are values from 0 to 255
 
@@ -18,3 +19,15 @@ I don't have RGB RAM.  when you're done, call `asusaura_close`.
 
 Code based on and ported to linux/i2c-dev:
 https://github.com/CalcProgrammer1/KeyboardVisualizer/commit/8889f3b133d9c6c2a53f7cc21e1dc73bd42a675c
+
+At the moment of this commit (Linux 4.20.0), this requires a patch to the linux
+kernel to add support for the AMD KERNCZ piix4 i2c controller on AMD Family 17h
+Zen systems.
+
+lspci -nn should indicate this device:
+`00:14.0 SMBus [0c05]: Advanced Micro Devices, Inc. [AMD] FCH SMBus Controller [1022:790b] (rev 59)`
+It's possible the revision may differ...
+
+This was tested on an Asus PRIME X370-PRO.  Not guaranteed to work nor wipe out
+your data or burn up your CPU or brick your system on any other board or even
+possibly other examples of this board.
