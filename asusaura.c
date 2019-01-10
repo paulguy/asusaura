@@ -20,10 +20,12 @@
 
 #define BSWAP(X) ((X << 8) | (X >> 8))
 
+#define LEDTYPE_MAX ((AsusAura_ControllerType)ASUSAURA_NONE)
+
 typedef struct {
     AsusAura_ControllerType type;
     int dev;
-    int addr;
+    unsigned char addr;
 } LEDController;
 
 static int maindev = -1;
@@ -31,12 +33,19 @@ static int auxdev = -1;
 #define LEDC_MAX (4)
 static unsigned int nledc;
 static LEDController ledc[LEDC_MAX+1];
-static const char *LEDControllerTypes[] = {"RAM 0",
-                                           "RAM 1",
-                                           "RAM 2",
-                                           "RAM 3",
-                                           "Mainboard",
-                                           "None"};
+static const char *LEDControllerTypes[LEDTYPE_MAX+1] = {"RAM 0",
+                                                        "RAM 1",
+                                                        "RAM 2",
+                                                        "RAM 3",
+                                                        "Mainboard",
+                                                        "None"};
+/* they're all the same now but in the future they may differ */
+static const int ColorCounts[LEDTYPE_MAX+1] = {5,
+                                               5,
+                                               5,
+                                               5,
+                                               5,
+                                               -1};
 
 int open_i2c_dev(const char *devpath) {
     int i2cdev;
@@ -66,9 +75,9 @@ int open_i2c_dev(const char *devpath) {
     return(i2cdev);
 }
 
-int set_i2c_slave(int i2cdev, int addr) {
+int set_i2c_slave(int i2cdev, unsigned char addr) {
     if(ioctl(i2cdev, I2C_SLAVE, addr) < 0) {
-        fprintf(stderr, "Couldn't set i2c slave addr %i: %s\n", addr, strerror(errno));
+        fprintf(stderr, "Couldn't set i2c slave addr %hhu: %s\n", addr, strerror(errno));
         return(-1);
     }
 
@@ -119,7 +128,7 @@ int asusaura_read(int i2cdev, unsigned char addr, unsigned short reg) {
     return(retval);
 }
 
-int asusaura_write_colors(int i2cdev, unsigned char addr, const unsigned char *colors) {
+int asusaura_write_colors(int i2cdev, unsigned char addr, const unsigned char *colors, int count) {
     if(set_i2c_slave(i2cdev, addr) < 0) {
         return(-1);
     }
@@ -131,7 +140,7 @@ int asusaura_write_colors(int i2cdev, unsigned char addr, const unsigned char *c
 
  	if(i2c_smbus_write_block_data(i2cdev,
  	                              COLOR_SET_CMD,
- 	                              ASUSAURA_COLORS_SIZE,
+ 	                              count * 3,
  	                              colors) < 0) {
  	    fprintf(stderr, "Failed to write color block: %s\n", strerror(errno));
  	    return(-1);
@@ -141,7 +150,7 @@ int asusaura_write_colors(int i2cdev, unsigned char addr, const unsigned char *c
 }
 
 void add_ledc(int i2cdev, unsigned char addr, AsusAura_ControllerType type) {
-    if(nledc >= LEDC_MAX) {
+    if(nledc > LEDC_MAX) {
         fprintf(stderr, "WARNING: Too many LED controllers!\n");
         return;
     }
@@ -149,6 +158,7 @@ void add_ledc(int i2cdev, unsigned char addr, AsusAura_ControllerType type) {
     ledc[nledc].type = type;
     ledc[nledc].dev = i2cdev;
     ledc[nledc].addr = addr;
+
     nledc++;
 }
 
@@ -178,6 +188,14 @@ void try_init_ledc(int i2cdev, unsigned char addr, AsusAura_ControllerType type)
 
 int asusaura_initialize(int maindev, int auxdev) {
     nledc = 0;
+    unsigned int i;
+
+    for(i = 0; i < LEDC_MAX; i++) {
+        ledc[nledc].type = ASUSAURA_NONE;
+        ledc[nledc].dev = -1;
+        ledc[nledc].addr = 0;
+    }
+
     if(maindev >= 0) {
         /* initialize RAM LED controllers if available */
         try_init_ledc(maindev, 0x70, ASUSAURA_RAM0);
@@ -225,7 +243,7 @@ int asusaura_dev_count() {
 }
 
 AsusAura_ControllerType asusaura_getType(unsigned int idx) {
-    if(idx > nledc) {
+    if(idx > LEDC_MAX) {
         return(ASUSAURA_NONE);
     }
 
@@ -233,28 +251,45 @@ AsusAura_ControllerType asusaura_getType(unsigned int idx) {
 }
 
 const char *asusaura_typeStr(AsusAura_ControllerType type) {
-    switch(type) {
-        case ASUSAURA_RAM0:
-            return(LEDControllerTypes[0]);
-        case ASUSAURA_RAM1:
-            return(LEDControllerTypes[1]);
-        case ASUSAURA_RAM2:
-            return(LEDControllerTypes[2]);
-        case ASUSAURA_RAM3:
-            return(LEDControllerTypes[3]);
-        case ASUSAURA_MAINBOARD:
-            return(LEDControllerTypes[4]);
-        default:
-            return(LEDControllerTypes[5]);
-    }
+    if(type < 0 || type > LEDTYPE_MAX)
+        return(LEDControllerTypes[ASUSAURA_NONE]);
+
+    return(LEDControllerTypes[type]);
 }
 
-int asusaura_update(unsigned int idx, const unsigned char *colors) {
-    if(idx > nledc) {
+unsigned int asusaura_getColorReq(unsigned int idx, AsusAura_Color **c) {
+    int count = ColorCounts[asusaura_getType(idx)];
+    if(count == -1)
+        return(-1);
+
+    *c = malloc(sizeof(AsusAura_Color) * count);
+    if(*c == NULL) {
         return(-1);
     }
 
-    if(asusaura_write_colors(ledc[idx].dev, ledc[idx].addr, colors) < 0) {
+    return(count);
+}
+
+void asusaura_freeColorReq(AsusAura_Color *c) {
+    free(c);
+}
+
+int asusaura_update(unsigned int idx, const AsusAura_Color *c) {
+    int i;
+
+    int count = ColorCounts[asusaura_getType(idx)];
+    if(count == -1) {
+        return(-1);
+    }
+
+    unsigned char colors[count * 3];
+    for(i = 0; i < count; i++) { /* RBG color I guess? */
+        colors[i * 3] = c[i].r;
+        colors[i * 3 + 1] = c[i].b;
+        colors[i * 3 + 2] = c[i].g;
+    }
+
+    if(asusaura_write_colors(ledc[idx].dev, ledc[idx].addr, colors, count) < 0) {
         return(-1);
     }
     WRITE_OR_ERROR(ledc[idx].dev, ledc[idx].addr, 0x80A0, 0x01)
