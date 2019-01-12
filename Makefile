@@ -1,5 +1,5 @@
-OBJS   = asusaura.o main.o
-TARGET = testaura
+OBJS   = arglist.o module.o i2c.o asusaura.o compyglow.o main.o
+TARGET = testglow
 CFLAGS = -Wall -Wextra -ggdb -Og
 LDFLAGS = -li2c
 

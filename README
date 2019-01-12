@@ -1,21 +1,23 @@
 build example with `make`.  requires libi2c from i2c-tools and i2c-dev driver.
 
-run with `./testaura <maindev> <auxdev> [<r> <g> <b>]`
+run with `./testaura [[<[module.]argument>[=value]] ...]`
+
+global options:
+  r (0 - 255) - Red
+  g (0 - 255) - Green
+  b (0 - 255) - Blue
+
+modules:
+  asusaura:
+    maindev (string) - Path to main i2c device
+    auxdev (string) - Path to aux i2c device
 
 maindev is usually the device listed as port 0 for example by i2cdetect
-auxdev should be listed as port 4
+auxdev I've seen as port 4 or port 1
 they take the full dev path eg.: `/dev/i2c-11`.  You'll need to be able to open
 and write these devices.
 
-r, g, and b are values from 0 to 255
-
-the library is used by calling `asusaura_open` with the main and aux device
-paths passed in.  number of detected devices is returned.  device type (RAM,
-Motherboard) can be determined by `asusaura_getType`.  a useful string can be
-returned by `asusaura_typeStr`.  `asusaura_update` can be used to pass a new
-set of colors to a device index.  the format is an array of 5 sets of 3 8 bit
-RGB values totaling 15 bytes.  I haven't tested compatibility with RAM because
-I don't have RGB RAM.  when you're done, call `asusaura_close`.
+See compyglow.h and arglist.h for information on using the library.
 
 Code based on and ported to linux/i2c-dev:
 https://github.com/CalcProgrammer1/KeyboardVisualizer/commit/8889f3b133d9c6c2a53f7cc21e1dc73bd42a675c
